@@ -1,0 +1,77 @@
+# Custom GitLab Duo Agent Platform flow — hands-off pipeline remediation.
+#
+# PROVENANCE: authored against publicly documented Duo Agent Platform behavior.
+# The "Fix CI/CD Pipeline" foundational flow is the closest built-in; this
+# custom flow narrows it to ProcurePilot's pipeline with a registered,
+# auditable remediation playbook. Tool names (gitlab.get_job,
+# gitlab.save_pipeline, gitlab.add_commit) follow the GitLab 19.4 MCP server
+# CI/CD + repository tool bundles, which expose pipeline inspection and
+# branch-commit actions to agents.
+#
+# Autonomy level: HANDS-OFF — the full detect → diagnose → fix → re-run loop
+# runs with no human in the middle. Every action is written to the remediation
+# audit log (see scripts/remediate-pipeline.ts for the local implementation
+# of this exact loop).
+#
+# Autonomy ladder note: the same flow runs ASSISTED by flipping
+# spec.approval.required to true — the agent then proposes the fix diff and
+# waits for a human tap before committing. One flag, three autonomy levels.
+
+apiVersion: duo.gitlab.com/v1alpha1
+kind: Flow
+
+metadata:
+  name: remediate-pipeline
+  description: >
+    Hands-off remediation of a failing pipeline: detect the failed job,
+    diagnose from its log, apply a minimal fix from the registered playbook,
+    re-run the pipeline, and post the audit trail.
+  autonomy: hands-off
+  lifecycleStages:
+    - verify    # the failing pipeline itself
+    - create    # the fix commit
+    - monitor   # audit log of remediation history
+
+spec:
+  approval:
+    required: false   # set true for Assisted mode (propose, wait for tap)
+
+  triggers:
+    - type: pipeline
+      on: [failed]
+
+  steps:
+    - id: detect
+      tool: gitlab.get_job
+      run: |
+        Fetch the failed job's name, stage, exit code, and log tail.
+        Record: pipeline id, job id, failed stage.
+
+    - id: diagnose
+      agent: pipeline-remediator
+      run: |
+        Classify the failure from the log (type error, test assertion,
+        missing dependency, missing env var, flake) and cite the exact
+        log lines. If the failure signature matches a registered playbook
+        entry, name it; otherwise stop and escalate to a human with the
+        diagnosis (no blind fixes).
+
+    - id: propose
+      agent: pipeline-remediator
+      run: |
+        Produce the minimal fix diff against the failing files, drawn from
+        the matched playbook entry. Show the diff in the MR/pipeline comment.
+
+    - id: apply
+      tool: gitlab.add_commit
+      run: |
+        Commit the fix to a new branch `remediate/<pipeline-id>`.
+        (Write tools default to human approval; this flow's hands-off policy
+        approves them. Flip spec.approval.required for Assisted mode.)
+
+    - id: verify
+      tool: gitlab.save_pipeline
+      run: |
+        Re-run the pipeline on the fix branch. If green, open a merge
+        request into the source branch and post the remediation audit log.
+        If still red after one retry, escalate to a human with full context.

@@ -1,0 +1,74 @@
+# Cloud Build → Artifact Registry → Cloud Run
+#
+# Trigger: git push (or `gcloud builds submit` from the repo root).
+#
+# Substitutions you must provide (via trigger settings, the Cloud Build UI,
+# or --substitutions on the CLI):
+#   _REGION          Cloud Run region, e.g. us-west1 (matches Dy's TZ)
+#   _SERVICE         Cloud Run service name, e.g. life-after-code
+#   _REPO            Artifact Registry repo name, e.g. life-after-code
+#   _SECRET_*        (optional) Secret Manager names for runtime env values —
+#                    see .env.example.gcp. Secrets are injected at deploy time
+#                    in cloudbuild.yaml; nothing secret is ever baked into the
+#                    image.
+#
+# One-time setup (Cloud console, needs owner's Google sign-in):
+#   1. Enable APIs: Cloud Build, Artifact Registry, Cloud Run, Secret Manager
+#   2. gcloud artifacts repositories create ${_REPO} --repository-format=docker \
+#        --location=${_REGION}
+#   3. gcloud secrets create LLM_API_KEY --data-file=- <<<"<redacted>"
+#      (only needed when MOCK_MODE=false)
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+steps:
+  # 1. Build the production image (Dockerfile defaults to Node 20).
+  - name: "gcr.io/cloud-builders/docker"
+    id: "docker-build"
+    args:
+      - "build"
+      - "-f"
+      - "infra/gcp/Dockerfile"
+      - "-t"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA"
+      - "."
+
+  # 2. Push to Artifact Registry.
+  - name: "gcr.io/cloud-builders/docker"
+    id: "docker-push"
+    args:
+      - "push"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA"
+
+  # 3. Deploy to Cloud Run. Secrets come from Secret Manager; everything else
+  #    is plain env (see .env.example.gcp). Scale-to-zero keeps cost at $0.
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk:slim"
+    id: "cloud-run-deploy"
+    entrypoint: "gcloud"
+    args:
+      - "run"
+      - "deploy"
+      - "${_SERVICE}"
+      - "--image"
+      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA"
+      - "--region"
+      - "${_REGION}"
+      - "--platform"
+      - "managed"
+      - "--port"
+      - "8080"
+      - "--memory"
+      - "512Mi"
+      - "--min-instances"
+      - "0"
+      - "--max-instances"
+      - "4"
+      - "--set-env-vars"
+      - "MOCK_MODE=true"
+      - "--update-secrets"
+      - "LLM_API_KEY=LLM_API_KEY:latest"
+      - "--allow-unauthenticated"
+
+images:
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$SHORT_SHA"

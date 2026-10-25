@@ -1,0 +1,31 @@
+# AI Catalog manifest — what to register after importing to GitLab.
+#
+# The AI Catalog is the central place to publish approved agents, flows, and
+# MCP client configurations and assign them to projects (publicly documented).
+# Register each file below in the project's AI Catalog; the repo files remain
+# the definitions of record.
+
+catalog:
+  version: "1"
+
+  agents:
+    - path: duo/agents/pipeline-remediator.agent.yml
+      scope: project
+      description: Diagnoses failing pipelines, proposes playbook-backed fixes.
+
+  flows:
+    - path: duo/flows/plan-verify-secure-deploy.flow.yml
+      scope: project
+      autonomy: supervised
+      description: MR-triggered plan → verify → secure → deploy loop.
+    - path: duo/flows/remediate-pipeline.flow.yml
+      scope: project
+      autonomy: hands-off
+      description: Detect → diagnose → fix → re-run on pipeline failure.
+
+  mcpClients:
+    - path: duo/mcp/procurepilot-mcp.json
+      scope: project
+      description: >
+        MCP servers the agents may call — pipeline-log tools for the demo
+        plus the GitLab MCP server template for live pipeline access.

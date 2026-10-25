@@ -1,0 +1,64 @@
+# Custom GitLab Duo Agent Platform flow — plan → verify → secure → deploy.
+#
+# PROVENANCE: authored against publicly documented Duo Agent Platform behavior
+# (AI Catalog publishes agents/flows to projects; custom flows are in beta;
+# foundational flows include "Code review" and "Fix CI/CD Pipeline").
+# Register this file in the project's AI Catalog after importing to GitLab;
+# the YAML here is the flow's definition of record in the repo.
+#
+# Autonomy level: SUPERVISED — agents execute the multi-step workflow on their
+# own; the human approves the outcome (the production deploy), not each step.
+
+apiVersion: duo.gitlab.com/v1alpha1
+kind: Flow
+
+metadata:
+  name: procurepilot-ship-loop
+  description: >
+    Supervised plan → verify → secure → deploy loop for ProcurePilot.
+    On every merge request: an agent plans the review, the pipeline verifies,
+    security findings get remediated, and a preview deploys. The human approves
+    the final outcome only.
+  autonomy: supervised
+  lifecycleStages:
+    - plan      # agent posts a review plan on the MR
+    - create    # agent proposes fix diffs as suggestions
+    - verify    # CI pipeline + remediation flow (see remediate-pipeline)
+    - secure    # SAST findings reviewed, fixes proposed
+    - release   # preview environment per MR
+    - configure # this flow + pipeline defined as code
+
+spec:
+  triggers:
+    - type: merge_request
+      on: [opened, synchronize]
+
+  steps:
+    - id: plan
+      agent: mr-reviewer
+      run: |
+        Review the MR diff and post a plan comment: what changed, risk areas,
+        which pipeline jobs will exercise it, and what could break.
+        Keep it under 15 lines.
+
+    - id: verify
+      flow: remediate-pipeline
+      run: |
+        Watch the MR pipeline. If any job fails, hand off to the
+        remediate-pipeline flow (detect → diagnose → fix → re-run) and
+        report the outcome back here.
+
+    - id: secure
+      agent: mr-reviewer
+      run: |
+        Read the SAST job findings for this MR. For each finding, post a
+        review comment with a minimal fix suggestion. Do not commit fixes
+        without the author's approval (Assisted behavior inside a
+        Supervised flow).
+
+    - id: deploy
+      agent: release-manager
+      run: |
+        When the pipeline is green and approvals are in, trigger the manual
+        deploy:preview job context and post the preview URL on the MR.
+        Summarize the whole loop: plan → verify → secure → deploy, with links.
