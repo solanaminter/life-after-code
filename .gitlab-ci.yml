@@ -1,0 +1,103 @@
+# ProcurePilot — Life After Code (Path B) pipeline.
+#
+# Multi-stage CI/CD designed for visible pipeline history: every push and merge
+# request runs install → typecheck → test → build, with security scanning and a
+# manual preview deploy. GitLab Duo agents (see duo/) attach to this pipeline:
+# the remediate-pipeline flow watches for failed jobs and fixes them hands-off.
+#
+# New work for the Life After Code submission period (post Oct 5, 2026).
+# Base app: ProcurePilot (MIT, github.com/solanaminter/procurepilot).
+
+include:
+  # GitLab-managed security scanning (SAST) — covers the "secure" lifecycle stage.
+  - template: Security/SAST.gitlab-ci.yml
+
+image: node:22
+
+variables:
+  NPM_CONFIG_CACHE: "$CI_PROJECT_DIR/.npm"
+
+cache:
+  key:
+    files:
+      - package-lock.json
+  paths:
+    - .npm/
+    - node_modules/
+
+stages:
+  - install
+  - typecheck
+  - test
+  - build
+  - secure
+  - deploy
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# ---------------------------------------------------------------- install
+install:deps:
+  stage: install
+  script:
+    - npm ci --no-audit --no-fund
+  artifacts:
+    paths:
+      - node_modules/
+    expire_in: 1 hour
+
+# ------------------------------------------------------------- typecheck
+typecheck:
+  stage: typecheck
+  needs: [install:deps]
+  script:
+    - npx tsc --noEmit
+  # The pipeline-remediation demo targets THIS job: the Duo flow watches for
+  # its failure, diagnoses the error, applies a fix, and re-runs the pipeline.
+
+# ------------------------------------------------------------------ test
+test:catalog-smoke:
+  stage: test
+  needs: [install:deps]
+  script:
+    - npx tsx scripts/smoke-catalog.ts
+
+test:remediation-loop:
+  stage: test
+  needs: [install:deps]
+  script:
+    # Proves the hands-off remediation loop end-to-end in CI:
+    # detect a failing check → diagnose → apply fix → re-run → green.
+    - export PATH="$CI_PROJECT_DIR/node_modules/.bin:$PATH"
+    - npx tsx scripts/remediate-pipeline.ts --ci
+
+# ----------------------------------------------------------------- build
+build:app:
+  stage: build
+  needs: [typecheck, test:catalog-smoke, test:remediation-loop]
+  script:
+    - npm run build
+  artifacts:
+    paths:
+      - .next/
+    expire_in: 1 week
+
+# ---------------------------------------------------------------- secure
+# SAST jobs are injected here by the Security/SAST.gitlab-ci.yml template.
+# The Duo "secure" step reviews their findings and proposes fixes as MR
+# review comments (see duo/flows/plan-verify-secure-deploy.flow.yml).
+
+# ---------------------------------------------------------------- deploy
+deploy:preview:
+  stage: deploy
+  needs: [build:app]
+  when: manual
+  allow_failure: true
+  script:
+    - echo "Preview deploy is manual: connect Vercel or GitLab Pages and run this job."
+    - echo "Live URL goes in the Devpost submission form (Path B requirement)."
+  environment:
+    name: preview/$CI_COMMIT_REF_SLUG
+    url: https://procurepilot-life-after-code.example.com
