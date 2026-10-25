@@ -1,0 +1,30 @@
+{
+  "status": "fixed",
+  "audit": [
+    {
+      "step": "detect",
+      "at": "2026-10-25T01:51:27.642Z",
+      "detail": "Failed job \"typecheck\" in stage \"typecheck\" — log tail:\n$ npx tsc --noEmit\ndemo/pipeline-remediation/src/checkout.ts(14,3): error TS2322: Type 'string' is not assignable to type 'number'.\n  The expected type comes from the return type declared here\nFound 1 error.\nCleaning up project directory and file based variables\nERROR: Job failed: exit code 2"
+    },
+    {
+      "step": "diagnose",
+      "at": "2026-10-25T01:51:27.643Z",
+      "detail": "ts-type-mismatch: String prices concatenated instead of summed; coerce with Number() before arithmetic."
+    },
+    {
+      "step": "propose",
+      "at": "2026-10-25T01:51:27.649Z",
+      "detail": "Minimal fix diff (playbook: ts-type-mismatch):\n- return items.reduce((sum, item) => sum + item.price, \"\");\n+ return items.reduce((sum, item) => sum + Number(item.price), 0);"
+    },
+    {
+      "step": "apply",
+      "at": "2026-10-25T01:51:27.649Z",
+      "detail": "Applied to working copy /home/hatch/workspace/hackathons/life-after-code/demo/pipeline-remediation/.work/src/checkout.ts"
+    },
+    {
+      "step": "verify",
+      "at": "2026-10-25T01:51:33.561Z",
+      "detail": "node --test on fixed copy: PASS\ntsc --noEmit on fixed copy: pass"
+    }
+  ]
+}
