@@ -60,11 +60,7 @@ new work.
 - Re-proof 2026-10-24 09:50 PT run: fixture fails genuinely (`''` vs numbers), remediation script detects TS2322, applies Number() fix to `.work/` copy, `node --test` PASS + `tsc --noEmit` pass, audit log status `fixed`. Broken fixture never modified.
 
 ## GAPS — resolve before hitting submit (do not file past these)
-1. **Public repo URL: https://github.com/solanaminter/life-after-code** (public, created 2026-10-25; snapshot push of text files in progress, cover binaries + video build artifacts excluded from the snapshot). The local repo (`master`, latest commit
-   "Filing prep: cover image + README thumbnail slot") currently has NO git
-   remote configured. Push to a public repo (GitHub and/or GitLab import,
-   public, MIT LICENSE at top) and paste the real URL — do not paste a
-   placeholder.
+1. **Public repo URL: https://github.com/solanaminter/life-after-code** (public, created 2026-10-25 00:13 PT; snapshot push verified landed 2026-10-25 00:45 PT via the GitHub API: 50 blobs, incl. `duo/`, `scripts/remediate-pipeline.ts`, `demo/pipeline-remediation/`, `docs/PATH_B_CHANGES.md`). Local repo (`master`) still has NO git remote configured — the push came through the snapshot route, not local git. NEW DEFECTS found on the pushed repo 2026-10-25 00:50 PT run — fix before filing: (a) `README.md` on GitHub is EMPTY (0 bytes) while the local README is 6,129 bytes — judges landing on the repo see nothing; (b) MISSING from GitHub: `app/` (the actual Next.js app code), `package.json`, `LICENSE` (MIT), `.gitlab-ci.yml`, `SUBMISSION_DRAFT.md`, `.env.example` — the pushed repo is lib/components/demo/duo/docs only and is NOT a runnable app as pushed. Cover binaries + video were excluded from the snapshot by design. Do not paste the repo URL as "complete" until README + LICENSE + app code are on GitHub.
 2. **GitLab project draft: not created.** Requires the GitLab sign-in gate
    (his tap / staffed window); the README's "What happens on GitLab import"
    steps assume that import.
