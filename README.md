@@ -94,7 +94,9 @@ see `docs/PATH_B_CHANGES.md` for the full accounting.
 
 ```bash
 # 1. Watch the fixture fail (the "broken pipeline")
-node --test demo/pipeline-remediation/test/
+# NOTE: use the file-path form — the directory form misfires under Node 24
+# with MODULE_NOT_FOUND instead of the genuine fixture failure.
+node --test demo/pipeline-remediation/test/checkout.test.mjs
 
 # 2. Run the hands-off loop — detect → diagnose → propose → apply → verify
 npx tsx scripts/remediate-pipeline.ts
